@@ -1,0 +1,130 @@
+name: Daily Reflection
+
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+jobs:
+  post-reflection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Post reflection
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          node <<'NODE'
+          const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
+          if (!WEBHOOK) throw new Error("Missing DISCORD_WEBHOOK_URL secret");
+
+          const ROLE_MENTION = "<@&1335021321050128410>";
+
+          process.env.TZ = "America/Los_Angeles";
+          function ymd(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, "0");
+            const d = String(date.getDate()).padStart(2, "0");
+            return `${y}-${m}-${d}`;
+          }
+
+          function decodeHtml(s) {
+            if (!s) return s;
+            return s
+              .replace(/&mdash;/g, "—")
+              .replace(/&ndash;/g, "–")
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&amp;/g, "&")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">");
+          }
+
+          async function fetchText(url) {
+            const res = await fetch(url, { headers: { "user-agent": "daily-reflection-bot/1.0" } });
+            if (!res.ok) throw new Error(`${url} -> ${res.status}`);
+            return await res.text();
+          }
+
+          async function fetchJson(url) {
+            const res = await fetch(url, { headers: { "user-agent": "daily-reflection-bot/1.0" } });
+            if (!res.ok) throw new Error(`${url} -> ${res.status}`);
+            return await res.json();
+          }
+
+          function pickOgImage(html) {
+            const m = html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+            return m?.[1] || null;
+          }
+
+          (async () => {
+            const now = new Date();
+            const dateStr = ymd(now);
+
+            const apiUrl = `https://api.aagroup.org.au/dailyreflections.json?date=${dateStr}`;
+            const data = await fetchJson(apiUrl);
+            const page = data.page || {};
+            const title = page.title || "Daily Reflection";
+            const dateDisplay = page.date || data.date || dateStr;
+            const reading = decodeHtml(page.reading || "");
+            const source = decodeHtml(page.source || "");
+            const thought = decodeHtml(page.thought || "");
+
+            const monthNames = [
+              "january", "february", "march", "april", "may", "june",
+              "july", "august", "september", "october", "november", "december"
+            ];
+            const slug = `${monthNames[now.getMonth()]}-${now.getDate()}-daily-reflections-${now.getFullYear()}`;
+            const ponderUrl = `https://dailyponderables.com/${slug}`;
+            let imageUrl = null;
+            try {
+              const html = await fetchText(ponderUrl);
+              imageUrl = pickOgImage(html);
+            } catch {
+              imageUrl = null;
+            }
+
+            const description =
+              `**${dateDisplay}**\n` +
+              `${reading}\n\n` +
+              `**${source}**\n\n` +
+              `${thought}\n` +
+              `${ROLE_MENTION}`;
+
+            const payload = {
+              content: null,
+              embeds: [
+                {
+                  title: String(title).toUpperCase(),
+                  description,
+                  url: "https://www.aa.org/daily-reflections",
+                  color: 41983,
+                  author: {
+                    name: "From the book of Daily Reflections",
+                    url: "https://www.aa.org/daily-reflections",
+                    icon_url: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSFPBCftvThY2Ak1IxjFtsmwYj3wDpwNGhGuQ&s"
+                  },
+                  ...(imageUrl ? { image: { url: imageUrl } } : {})
+                }
+              ],
+              attachments: []
+            };
+
+            const res = await fetch(WEBHOOK, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+              const t = await res.text().catch(() => "");
+              throw new Error(`Discord webhook failed: ${res.status} ${t}`);
+            }
+
+            console.log(`Posted reflection for ${dateStr} (${dateDisplay})`);
+          })();
+          NODE
