@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="https://unpkg.com/tsml-ui@1/dist/tsml-ui.css" />
 </head>
 <body>
-  <div id="tsml-ui" data-src="./meetings.csv">
+  <div id="tsml-ui" data-src="./meetings.json">
     <p id="status" style="text-align:center; padding-top:50px; font-family: sans-serif;">
       Connecting to meetings.csv...
     </p>
@@ -16,7 +16,7 @@
   
   <script>
     // Force a check to see if the file is actually readable
-    fetch('./meetings.csv', { cache: "no-store" })
+    fetch('./meetings.json', { cache: "no-store" })
       .then(response => {
         if (!response.ok) throw new Error('File not found (404)');
         return response.text();
