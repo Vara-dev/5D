@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>District 25 AA</title>
+  <link rel="stylesheet" href="https://unpkg.com/tsml-ui@1/dist/tsml-ui.css" />
+</head>
+<body>
+  <div id="tsml-ui" data-src="./meetings.csv">
+    <p id="status" style="text-align:center; padding-top:50px; font-family: sans-serif;">
+      Connecting to meetings.csv...
+    </p>
+  </div>
+
+  <script src="https://unpkg.com/tsml-ui@1/dist/tsml-ui.js"></script>
+  
+  <script>
+    // Force a check to see if the file is actually readable
+    fetch('./meetings.csv', { cache: "no-store" })
+      .then(response => {
+        if (!response.ok) throw new Error('File not found (404)');
+        return response.text();
+      })
+      .then(text => {
+        console.log('File found! First line is: ' + text.split('\n')[0]);
+        if (!text.includes('name,day,time')) {
+          document.getElementById('status').innerHTML = '⚠️ Error: CSV headers are incorrect.';
+        }
+      })
+      .catch(err => {
+        document.getElementById('status').innerHTML = '⚠️ Error: ' + err.message;
+      });
+  </script>
+</body>
+</html>
